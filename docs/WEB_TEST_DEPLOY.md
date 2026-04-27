@@ -61,12 +61,16 @@ npm start
 https://github.com/hydest65/phde-checkin-system
 ```
 
-本地推荐使用 GitHub Desktop 提交和推送。每次同步前确认：
+本地推荐使用 GitHub Desktop 完成本地与 GitHub 的双向同步。每次同步前确认：
 
 - 不上传 `data/phde-state.json`。
 - 不上传 `.env`、`node_modules` 或临时 zip 包。
 - 已运行 `npm run docs:check`。
 - 如果修改了 JavaScript，已运行 `npm run check`。
+- 先点击 `Fetch origin`，确认 GitHub 是否有更新。
+- 如果 GitHub 有更新，先 `Pull origin` 到本地。
+- 如果本地有更新，再 `Commit to main` 并 `Push origin`。
+- 如果本地和 GitHub 两边都有更新，先确认合并方向后再同步。
 
 ## 测试方式
 

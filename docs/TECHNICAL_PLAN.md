@@ -215,4 +215,7 @@ https://github.com/hydest65/phde-checkin-system
 - 根据影响范围更新 `docs/PRD.md`、`docs/TECHNICAL_PLAN.md` 和 `docs/WEB_TEST_DEPLOY.md`。
 - 运行 `npm run docs:check` 检查文档完整性、UTF-8 编码、旧乱码标记和中文文件名。
 - 如果修改了 JavaScript，运行 `npm run check`。
-- 通过 GitHub Desktop 提交并推送到 `main` 分支。
+- 比较本地 `main` 与 GitHub `origin/main` 哪一端更新。
+- 如果本地更新，提交并推送到 GitHub。
+- 如果 GitHub 更新，先拉取云端更新到本地。
+- 如果两端都有新改动，先确认合并方向，再继续同步。
