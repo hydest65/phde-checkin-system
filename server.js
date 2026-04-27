@@ -150,6 +150,11 @@ async function handleApi(req, res, url) {
       const validationMessage = validateEmployee(formEmployee);
       if (validationMessage) return sendError(res, 400, validationMessage);
 
+      const employeeByName = state.employees.find((item) => item.name === formEmployee.name);
+      if (employeeByName && employeeByName.employeeId !== formEmployee.employeeId) {
+        return sendError(res, 400, "工号与姓名不匹配。");
+      }
+
       const employeeIndex = state.employees.findIndex((item) => item.employeeId === formEmployee.employeeId);
       const existingEmployee = employeeIndex >= 0 ? state.employees[employeeIndex] : null;
       if (existingEmployee && existingEmployee.name !== formEmployee.name) {

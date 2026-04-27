@@ -89,8 +89,6 @@ async function init() {
 function bindEvents() {
   window.addEventListener("hashchange", route);
   qs("#checkinForm").addEventListener("submit", handleCheckin);
-  qs("#employeeNameInput").addEventListener("input", autofillEmployeeProfile);
-  qs("#employeeNameInput").addEventListener("blur", autofillEmployeeProfile);
   qs("#employeeFilter").addEventListener("input", renderStatusList);
   qs("#adminLoginForm").addEventListener("submit", handleAdminLogin);
   qs("#logoutAdmin").addEventListener("click", logoutAdmin);
@@ -184,17 +182,6 @@ function readEmployeeForm() {
     email: existingEmployee?.email || `${employeeId || "employee"}@phde.local`,
     remark: "员工自助登记",
   };
-}
-
-function autofillEmployeeProfile() {
-  const name = qs("#employeeNameInput").value.trim();
-  if (!name) return;
-
-  const employee = state.employees.find((item) => item.name === name);
-  if (!employee) return;
-
-  qs("#employeeIdInput").value = employee.employeeId || "";
-  qs("#employeePhoneInput").value = employee.phone || "";
 }
 
 function validateEmployeeForm(employee) {
@@ -393,6 +380,11 @@ async function handleCheckin(event) {
   if (validationMessage) return showFeedback("error", validationMessage);
 
   const manualLocation = qs("#locationSelect").value;
+  const employeeByName = state.employees.find((item) => item.name === formEmployee.name);
+  if (employeeByName && employeeByName.employeeId !== formEmployee.employeeId) {
+    return showFeedback("error", "工号与姓名不匹配。");
+  }
+
   const existingEmployee = state.employees.find((item) => item.employeeId === formEmployee.employeeId);
   if (existingEmployee && existingEmployee.name !== formEmployee.name) {
     return showFeedback("error", "工号与姓名不匹配。");
