@@ -1,6 +1,6 @@
 {
   "name": "phde-checkin-system",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "PHDE check-in system web prototype",
   "main": "server.js",

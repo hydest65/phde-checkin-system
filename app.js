@@ -1,4 +1,3 @@
-const ADMIN_PASSWORD = "PHDE2026";
 const STORAGE_KEY = "phde_checkin_state_v5";
 const ADMIN_SESSION_KEY = "phde_admin";
 
@@ -80,6 +79,7 @@ async function init() {
   qs("#adminMonth").value = monthKey();
   renderLocationOptions();
   bindEvents();
+  await syncAdminSession();
   route();
   await loadState();
   startRealtimeLocation();
@@ -105,11 +105,23 @@ function bindEvents() {
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    credentials: "same-origin",
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.message || "请求失败。");
   return payload;
+}
+
+async function syncAdminSession() {
+  try {
+    const payload = await apiRequest("/api/admin/session");
+    isAdmin = Boolean(payload.isAdmin || sessionStorage.getItem(ADMIN_SESSION_KEY) === "1");
+    if (isAdmin) sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+    else sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  } catch {
+    isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+  }
 }
 
 async function loadState() {
@@ -579,20 +591,30 @@ function renderStatusList() {
     .join("");
 }
 
-function handleAdminLogin(event) {
+async function handleAdminLogin(event) {
   event.preventDefault();
-  if (qs("#adminPassword").value === ADMIN_PASSWORD) {
+  const password = qs("#adminPassword").value;
+  try {
+    await apiRequest("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
     isAdmin = true;
     sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
     qs("#adminPassword").value = "";
     renderAdminAuth();
     renderAdmin();
-  } else {
-    alert("管理密码不正确。");
+  } catch (error) {
+    alert(error.message || "管理密码不正确。");
   }
 }
 
-function logoutAdmin() {
+async function logoutAdmin() {
+  try {
+    if (apiAvailable) await apiRequest("/api/admin/logout", { method: "POST", body: "{}" });
+  } catch {
+    // Local session cleanup below still keeps the UI consistent if the server is unavailable.
+  }
   isAdmin = false;
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
   renderAdminAuth();

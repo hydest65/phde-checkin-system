@@ -123,6 +123,25 @@ phde-checkin-system
 
 清空原型数据，恢复为空员工和空签到记录。
 
+### `POST /api/admin/login`
+
+校验管理密码。密码正确时写入服务端登录凭证 Cookie，用于管理后台和受保护文档访问。前端不再自行比对管理密码。
+
+### `POST /api/admin/logout`
+
+清除服务端登录凭证 Cookie。
+
+### `GET /api/admin/session`
+
+返回当前浏览器是否已有有效管理登录状态。
+
+### 受保护文档
+
+以下文档由服务端静态文件层保护，未登录时返回“需要管理密码”页面：
+
+- `/docs/PRD.md`
+- `/docs/TECHNICAL_PLAN.md`
+
 ## 6. 自动定位方案
 
 Web 端使用浏览器 Geolocation API 获取定位授权。
