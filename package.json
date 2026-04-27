@@ -1,0 +1,15 @@
+{
+  "name": "phde-checkin-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PHDE check-in system web prototype",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check app.js && node --check server.js",
+    "docs:check": "node scripts/check-docs.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
