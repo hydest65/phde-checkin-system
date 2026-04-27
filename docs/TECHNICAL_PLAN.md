@@ -177,3 +177,21 @@ Web 端使用浏览器 Geolocation API 获取定位授权。
 - 经纬度不在页面文字和导出中展示。
 - 手机号和邮箱属于个人信息，正式版需要限制后台访问权限。
 - 数据库应定期备份。
+
+## 10. 版本管理与文档自动化
+
+当前项目已同步到 GitHub：
+
+```text
+https://github.com/hydest65/phde-checkin-system
+```
+
+版本号记录在 `package.json` 的 `version` 字段中，产品级变更记录在 `docs/CHANGELOG.md` 中。
+
+每次完成一组功能修改后，应执行一次版本收尾：
+
+- 更新 `docs/CHANGELOG.md`。
+- 根据影响范围更新 `docs/PRD.md`、`docs/TECHNICAL_PLAN.md` 和 `docs/WEB_TEST_DEPLOY.md`。
+- 运行 `npm run docs:check` 检查文档完整性、UTF-8 编码、旧乱码标记和中文文件名。
+- 如果修改了 JavaScript，运行 `npm run check`。
+- 通过 GitHub Desktop 提交并推送到 `main` 分支。

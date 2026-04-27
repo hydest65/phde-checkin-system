@@ -53,6 +53,21 @@ npm start
 
 平台需要提供可写文件系统，否则 `data/phde-state.json` 可能在服务重启后丢失。测试阶段可以接受；正式使用建议换成 PostgreSQL、MySQL 或 SQLite 持久化数据库。
 
+## GitHub 同步
+
+当前云端仓库：
+
+```text
+https://github.com/hydest65/phde-checkin-system
+```
+
+本地推荐使用 GitHub Desktop 提交和推送。每次同步前确认：
+
+- 不上传 `data/phde-state.json`。
+- 不上传 `.env`、`node_modules` 或临时 zip 包。
+- 已运行 `npm run docs:check`。
+- 如果修改了 JavaScript，已运行 `npm run check`。
+
 ## 测试方式
 
 员工首次签到时填写姓名、工号、手机号，选择办公地点后点击“上班签到”。工号不存在时，系统会自动创建员工档案；工号已存在时，会校验姓名是否匹配。

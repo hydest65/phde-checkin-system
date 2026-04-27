@@ -220,7 +220,8 @@ function displayAutoAddress(value) {
   const address = String(value || "").trim();
   if (!address) return "未授权";
   if (address.includes("城市：") && address.includes("大概位置：")) return address;
-  if (address === "未授权" || address === "自动定位异常" || address === "当前位置附近") return address;
+  if (address === "未授权" || address === "自动定位异常") return address;
+  if (address === "当前位置附近" || address === "设备当前位置附近") return "城市：当前城市，大概位置：当前位置附近";
   if (/纬度|经度|latitude|longitude/i.test(address)) return "城市：当前城市，大概位置：当前位置附近";
   return localizeFreeformAddress(address);
 }
@@ -247,6 +248,14 @@ function compactAddressFromResult(result) {
   if (road) return `城市：未知，大概位置：${road}附近`;
   if (result?.display_name) return `城市：未知，大概位置：${localizeRoad(result.display_name.split(",")[0])}附近`;
   return "当前位置附近";
+}
+
+function fallbackAutoAddress(manualLocation) {
+  return locationAddressMap[manualLocation] || "城市：当前城市，大概位置：当前位置附近";
+}
+
+function isPendingAutoAddress(address) {
+  return !address || address === "正在解析当前位置..." || address === "定位获取中" || address === "当前位置附近" || address === "设备当前位置附近";
 }
 
 function localizeCity(value) {
@@ -471,16 +480,29 @@ function saveCheckinLocally(formEmployee, manualLocation, locationResult, existi
 
 function getAutoAddress(manualLocation) {
   if (liveLocation.status === "success" || liveLocation.status === "denied" || liveLocation.status === "error") {
-    const address = liveLocation.address === "正在解析当前位置..." ? "当前位置附近" : liveLocation.address;
+    const address = isPendingAutoAddress(liveLocation.address) ? fallbackAutoAddress(manualLocation) : liveLocation.address;
     return Promise.resolve({ address, status: liveLocation.status });
   }
 
   if (!navigator.geolocation) return Promise.resolve({ address: "自动定位异常", status: "error" });
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLiveLocation(position);
-        resolve({ address: locationAddressMap[manualLocation] || "设备当前位置附近", status: "success" });
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        liveLocation = {
+          address: "正在解析当前位置...",
+          status: "success",
+          latitude,
+          longitude,
+          updatedAt: new Date().toISOString(),
+        };
+        renderLiveLocationMap();
+
+        const resolvedAddress = await reverseGeocode(latitude, longitude);
+        const address = isPendingAutoAddress(resolvedAddress) ? fallbackAutoAddress(manualLocation) : resolvedAddress;
+        liveLocation = { ...liveLocation, address };
+        renderLiveLocationMap();
+        resolve({ address, status: "success" });
       },
       (error) => {
         setLiveLocationError(error);
