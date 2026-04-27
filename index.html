@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PHDE签到系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#employee" aria-label="PHDE签到系统">
+        <img src="./assets/morimatsu-symbol.jpg" alt="Morimatsu" />
+        <span class="brand-word">MORIMATSU</span>
+        <span class="brand-divider"></span>
+        <span class="brand-system">PHDE签到系统</span>
+      </a>
+      <nav class="nav-tabs" aria-label="页面导航">
+        <a href="#employee" data-route="employee">员工签到</a>
+        <a href="#admin" data-route="admin">管理后台</a>
+        <a href="./docs/PRD.md">产品文档</a>
+        <a href="./docs/TECHNICAL_PLAN.md">技术方案</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="employeePage" class="page page-shell employee-layout">
+        <section class="hero-panel">
+          <p class="eyebrow">PHDE</p>
+          <h1>员工上班签到</h1>
+          <p class="hero-copy">首次使用请填写姓名、工号和手机号。系统会自动建立员工档案，并完成当天上班签到。</p>
+
+          <form id="checkinForm" class="checkin-card">
+            <label>
+              <span>姓名</span>
+              <input id="employeeNameInput" type="text" placeholder="请输入姓名" autocomplete="name" list="employeeNameOptions" required />
+              <datalist id="employeeNameOptions"></datalist>
+            </label>
+            <label>
+              <span>工号</span>
+              <input id="employeeIdInput" type="text" placeholder="请输入工号" autocomplete="off" required />
+            </label>
+            <label>
+              <span>手机号</span>
+              <input id="employeePhoneInput" type="tel" placeholder="请输入手机号" autocomplete="tel" required />
+            </label>
+            <label>
+              <span>手动地点</span>
+              <select id="locationSelect" required></select>
+            </label>
+            <section class="location-map" aria-label="实时定位地图">
+              <div class="location-map-head">
+                <strong>实时定位地图</strong>
+                <span id="liveLocationStatus">正在获取定位...</span>
+              </div>
+              <iframe id="liveLocationMap" title="实时定位地图" loading="lazy" referrerpolicy="no-referrer"></iframe>
+              <p id="liveLocationText">请允许浏览器定位后查看实时位置。</p>
+            </section>
+            <button class="primary-action" type="submit">上班签到</button>
+          </form>
+
+          <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="status-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">今日概览</p>
+              <h2>签到状态</h2>
+            </div>
+            <div class="metric">
+              <span id="todaySigned">0</span>
+              <small>/ <b id="todayTotal">0</b> 已签到</small>
+            </div>
+          </div>
+          <div class="status-tools">
+            <input id="employeeFilter" type="search" placeholder="搜索姓名、工号或手机号" />
+          </div>
+          <div id="statusList" class="status-list"></div>
+        </section>
+      </section>
+
+      <section id="adminPage" class="page page-shell admin-layout hidden">
+        <section id="adminLogin" class="admin-login">
+          <p class="eyebrow">管理入口</p>
+          <h1>后台访问</h1>
+          <p>请输入管理密码查看签到记录、导入员工名单和导出 Excel。</p>
+          <form id="adminLoginForm">
+            <input id="adminPassword" type="password" placeholder="管理密码" autocomplete="current-password" />
+            <button class="primary-action" type="submit">进入后台</button>
+          </form>
+          <small>原型默认密码：PHDE2026。正式版建议放入服务器配置。</small>
+        </section>
+
+        <section id="adminDashboard" class="admin-dashboard hidden">
+          <div class="admin-title">
+            <div>
+              <p class="eyebrow">管理后台</p>
+              <h1>签到记录与员工名单</h1>
+            </div>
+            <button id="logoutAdmin" class="ghost-action" type="button">退出</button>
+          </div>
+
+          <div class="admin-cards">
+            <article>
+              <span>今日已签到</span>
+              <strong id="adminTodaySigned">0</strong>
+            </article>
+            <article>
+              <span>员工总数</span>
+              <strong id="adminTotalEmployees">0</strong>
+            </article>
+            <article>
+              <span>本月签到人次</span>
+              <strong id="adminMonthCount">0</strong>
+            </article>
+          </div>
+
+          <div class="toolbar">
+            <label>
+              日期
+              <input id="adminDate" type="date" />
+            </label>
+            <label>
+              月份
+              <input id="adminMonth" type="month" />
+            </label>
+          </div>
+
+          <div class="admin-grid">
+            <section class="module">
+              <div class="module-head">
+                <h2>单日签到明细</h2>
+                <button id="exportDay" class="ghost-action" type="button">导出单日明细</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>工号</th>
+                      <th>签到时间</th>
+                      <th>手动地点</th>
+                      <th>自动定位</th>
+                      <th>修改机会</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dayRecords"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="module">
+              <div class="module-head">
+                <h2>月度统计</h2>
+                <div class="button-row">
+                  <button id="exportMonthDetail" class="ghost-action" type="button">导出月度明细</button>
+                  <button id="exportMonthSummary" class="ghost-action" type="button">导出月度统计</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>工号</th>
+                      <th>本月签到天数</th>
+                      <th>最近签到</th>
+                    </tr>
+                  </thead>
+                  <tbody id="monthSummary"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <section class="module">
+            <div class="module-head">
+              <h2>员工名单导入</h2>
+              <button id="exportEmployees" class="ghost-action" type="button">导出员工名单</button>
+            </div>
+            <p class="module-copy">可通过表格文本批量导入。表头为：姓名、工号、手机号、邮箱、备注。遇到重复工号时会提示选择覆盖或跳过。</p>
+            <textarea id="employeeImport" rows="6" placeholder="姓名	工号	手机号	邮箱	备注&#10;张三	PHDE001	13800000000	zhangsan@example.com	"></textarea>
+            <div class="button-row import-actions">
+              <button id="importEmployees" class="primary-action" type="button">导入名单</button>
+              <button id="resetEmpty" class="ghost-action danger" type="button">清空原型数据</button>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
