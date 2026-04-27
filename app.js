@@ -69,7 +69,9 @@ let liveLocation = {
   latitude: null,
   longitude: null,
   updatedAt: "",
+  message: "",
 };
+let locationWatchId = null;
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
@@ -89,6 +91,12 @@ async function init() {
 function bindEvents() {
   window.addEventListener("hashchange", route);
   qs("#checkinForm").addEventListener("submit", handleCheckin);
+  qs("#employeeNameInput").addEventListener("input", renderCheckinPreview);
+  qs("#employeeIdInput").addEventListener("input", renderCheckinPreview);
+  qs("#employeePhoneInput").addEventListener("input", renderCheckinPreview);
+  qs("#locationSelect").addEventListener("change", renderCheckinPreview);
+  qs("#locationSelect").addEventListener("change", renderLiveLocationMap);
+  qs("#retryLocation")?.addEventListener("click", startRealtimeLocation);
   qs("#employeeFilter").addEventListener("input", renderStatusList);
   qs("#adminLoginForm").addEventListener("submit", handleAdminLogin);
   qs("#logoutAdmin").addEventListener("click", logoutAdmin);
@@ -175,6 +183,7 @@ function renderLocationOptions() {
 function renderAll() {
   renderEmployeeNameOptions();
   renderStatusList();
+  renderCheckinPreview();
   renderAdmin();
 }
 
@@ -194,6 +203,103 @@ function readEmployeeForm() {
     email: existingEmployee?.email || `${employeeId || "employee"}@phde.local`,
     remark: "员工自助登记",
   };
+}
+
+function renderCheckinPreview() {
+  const hint = qs("#employeeCheckinHint");
+  const submitButton = qs("#checkinSubmitButton");
+  if (!hint || !submitButton) return;
+
+  const name = qs("#employeeNameInput").value.trim();
+  const employeeId = qs("#employeeIdInput").value.trim();
+  const manualLocation = qs("#locationSelect").value;
+  const employee = state.employees.find((item) => item.employeeId === employeeId);
+  const employeeByName = state.employees.find((item) => item.name === name);
+  const todayRecord = state.checkins.find((item) => item.employeeId === employeeId && item.date === todayKey());
+
+  hint.className = "checkin-hint";
+  submitButton.textContent = "上班签到";
+  renderCheckinStatusStrip(employee, todayRecord, name, employeeId, employeeByName);
+
+  if (!name && !employeeId) {
+    hint.innerHTML = "<strong>签到前确认</strong><p>输入姓名和工号后，系统会提示今日签到或修改状态。</p>";
+    return;
+  }
+
+  if (!name || !employeeId) {
+    hint.classList.add("warning");
+    hint.innerHTML = "<strong>信息待补全</strong><p>请同时填写姓名和工号，系统会据此确认员工档案和今日签到状态。</p>";
+    return;
+  }
+
+  if ((employee && employee.name !== name) || (employeeByName && employeeByName.employeeId !== employeeId)) {
+    hint.classList.add("error");
+    hint.innerHTML = `<strong>工号与姓名不匹配</strong><p>请核对姓名和工号后再提交。</p>`;
+    return;
+  }
+
+  if (!employee) {
+    hint.classList.add("success");
+    hint.innerHTML = `<strong>首次登记并签到</strong><p>提交后会自动建立员工档案，并记录今日地点：${escapeHtml(manualLocation)}。</p>`;
+    return;
+  }
+
+  if (!todayRecord) {
+    hint.classList.add("success");
+    hint.innerHTML = `<strong>今日尚未签到</strong><p>${escapeHtml(employee.name)} 可提交今日上班签到，提交后仍有一次修改机会。</p>`;
+    return;
+  }
+
+  submitButton.textContent = canModifyCheckin(todayRecord) ? "修改今日签到" : "今日已完成";
+
+  if (canModifyCheckin(todayRecord)) {
+    hint.classList.add("warning");
+    hint.innerHTML = `<strong>今日已签到，可修改一次</strong><p>当前记录：${escapeHtml(formatTime(todayRecord.time))}，${escapeHtml(todayRecord.manualLocation)}。再次提交会用掉最后一次修改机会。</p>`;
+    return;
+  }
+
+  hint.classList.add("error");
+  hint.innerHTML = `<strong>今日修改机会已用完</strong><p>当前记录：${escapeHtml(formatTime(todayRecord.time))}，${escapeHtml(todayRecord.manualLocation)}。如需调整，请联系管理员。</p>`;
+}
+
+function renderCheckinStatusStrip(employee, todayRecord, name, employeeId, employeeByName) {
+  const strip = qs("#checkinStatusStrip");
+  if (!strip) return;
+
+  let status = { tone: "", value: "待填写" };
+  let edit = { tone: "", value: "填写后判断" };
+
+  if (name && employeeId) {
+    if ((employee && employee.name !== name) || (employeeByName && employeeByName.employeeId !== employeeId)) {
+      status = { tone: "error", value: "信息不匹配" };
+      edit = { tone: "error", value: "不可提交" };
+    } else if (!employee) {
+      status = { tone: "success", value: "首次登记" };
+      edit = { tone: "success", value: "签到后可改 1 次" };
+    } else if (!todayRecord) {
+      status = { tone: "success", value: "今日未签到" };
+      edit = { tone: "success", value: "提交后可改 1 次" };
+    } else if (canModifyCheckin(todayRecord)) {
+      status = { tone: "warning", value: "今日已签到" };
+      edit = { tone: "warning", value: "剩余最后 1 次" };
+    } else {
+      status = { tone: "error", value: "今日已完成" };
+      edit = { tone: "error", value: "修改机会已用完" };
+    }
+  } else if (name || employeeId) {
+    status = { tone: "warning", value: "信息待补全" };
+  }
+
+  const dataMode = apiAvailable ? "共享服务器" : "本机临时保存";
+  strip.innerHTML = [
+    statusPill("当前状态", status.value, status.tone),
+    statusPill("修改机会", edit.value, edit.tone),
+    statusPill("数据模式", dataMode, apiAvailable ? "success" : "warning"),
+  ].join("");
+}
+
+function statusPill(label, value, tone = "") {
+  return `<section class="status-pill ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></section>`;
 }
 
 function validateEmployeeForm(employee) {
@@ -338,25 +444,38 @@ async function setLiveLocation(position) {
 
 function setLiveLocationError(error) {
   const denied = error?.code === 1;
+  const insecureLan = window.location.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
   liveLocation = {
     address: denied ? "未授权" : "自动定位异常",
     status: denied ? "denied" : "error",
     latitude: null,
     longitude: null,
     updatedAt: new Date().toISOString(),
+    message: denied
+      ? "当前浏览器没有开放定位权限，系统将使用手动地点继续签到测试。"
+      : insecureLan
+        ? "手机通过局域网 HTTP 访问时，浏览器可能会禁止实时定位。"
+        : "定位超时或设备暂时没有返回位置。",
   };
   renderLiveLocationMap();
 }
 
 function startRealtimeLocation() {
   if (!navigator.geolocation) {
-    liveLocation = { ...liveLocation, address: "自动定位异常", status: "error" };
+    liveLocation = {
+      ...liveLocation,
+      address: "自动定位异常",
+      status: "error",
+      message: "当前浏览器不支持实时定位。",
+    };
     renderLiveLocationMap();
     return;
   }
 
+  if (locationWatchId !== null) navigator.geolocation.clearWatch(locationWatchId);
+  liveLocation = { ...liveLocation, address: "定位获取中", status: "pending", message: "" };
   renderLiveLocationMap();
-  navigator.geolocation.watchPosition(setLiveLocation, setLiveLocationError, {
+  locationWatchId = navigator.geolocation.watchPosition(setLiveLocation, setLiveLocationError, {
     enableHighAccuracy: true,
     timeout: 10000,
     maximumAge: 30000,
@@ -367,20 +486,34 @@ function renderLiveLocationMap() {
   const status = qs("#liveLocationStatus");
   const text = qs("#liveLocationText");
   const map = qs("#liveLocationMap");
-  if (!status || !text || !map) return;
+  const fallback = qs("#locationMapFallback");
+  if (!status || !text || !map || !fallback) return;
 
   if (liveLocation.status === "success") {
     const lat = liveLocation.latitude;
     const lon = liveLocation.longitude;
     status.textContent = "定位已更新";
     text.textContent = `${liveLocation.address}，更新时间：${formatTime(liveLocation.updatedAt)}`;
+    fallback.hidden = true;
     map.hidden = false;
     map.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.006}%2C${lat - 0.004}%2C${lon + 0.006}%2C${lat + 0.004}&layer=mapnik&marker=${lat}%2C${lon}`;
     return;
   }
 
   status.textContent = liveLocation.status === "pending" ? "正在获取定位" : liveLocation.address;
-  text.textContent = liveLocation.status === "pending" ? "请允许浏览器定位后查看实时位置。" : `自动定位：${liveLocation.address}`;
+  const manualLocation = qs("#locationSelect")?.value || "未选择";
+  fallback.hidden = false;
+  fallback.className = `location-map-fallback ${liveLocation.status}`;
+  fallback.querySelector("strong").textContent =
+    liveLocation.status === "pending" ? "等待定位授权" : liveLocation.status === "denied" ? "手动地点测试模式" : liveLocation.address;
+  fallback.querySelector("span").textContent =
+    liveLocation.status === "pending"
+      ? `当前手动地点：${manualLocation}。允许定位后会切换为实时地图。`
+      : `${liveLocation.message || "实时定位暂不可用。"} 当前手动地点：${manualLocation}。`;
+  text.textContent =
+    liveLocation.status === "pending"
+      ? "请允许浏览器定位后查看实时位置。"
+      : `自动定位：${liveLocation.address}。当前使用手动地点：${manualLocation}，签到可继续提交。`;
   map.hidden = true;
   map.removeAttribute("src");
 }
