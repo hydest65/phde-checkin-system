@@ -973,6 +973,10 @@ textarea:focus {
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
+.person-row > div {
+  min-width: 0;
+}
+
 .person-row strong {
   display: block;
 }
@@ -1004,11 +1008,18 @@ textarea:focus {
 }
 
 .person-meta {
-  display: block;
-  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  gap: 6px 12px;
+}
+
+.person-meta span {
+  max-width: 100%;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
