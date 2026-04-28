@@ -807,8 +807,8 @@ function renderStatusList() {
   qs("#statusList").innerHTML = rows
     .map(({ employee, checkin }) => {
       const signedHtml = checkin
-        ? `<span>时间：${escapeHtml(formatTime(checkin.time))}</span><span>地点：${escapeHtml(checkin.manualLocation)}</span><span>自动定位：${escapeHtml(displayAutoAddress(checkin.autoAddress))}</span>`
-        : '<span>自动定位：待签到</span><span>今日暂无签到记录</span>';
+        ? `时间：${escapeHtml(formatTime(checkin.time))} · 地点：${escapeHtml(checkin.manualLocation)} · 自动定位：${escapeHtml(displayAutoAddress(checkin.autoAddress))}`
+        : "自动定位：待签到 · 今日暂无签到记录";
       const editBadgeHtml = checkin
         ? `<span class="edit-chip ${canModifyCheckin(checkin) ? "available" : "used"}">${canModifyCheckin(checkin) ? "可修改 1 次" : "修改已用完"}</span>`
         : "";
@@ -820,9 +820,7 @@ function renderStatusList() {
               ${editBadgeHtml}
             </div>
             <div class="person-meta">
-              <span>工号：${escapeHtml(employee.employeeId)}</span>
-              <span>手机号：${escapeHtml(employee.phone)}</span>
-              ${signedHtml}
+              <span>工号：${escapeHtml(employee.employeeId)} · 手机号：${escapeHtml(employee.phone)} · ${signedHtml}</span>
             </div>
           </div>
           <span class="badge ${checkin ? "signed" : "pending"}">${checkin ? "已签到" : "未签到"}</span>

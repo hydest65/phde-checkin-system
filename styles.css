@@ -968,8 +968,8 @@ textarea:focus {
 .person-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px 14px;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
@@ -982,7 +982,7 @@ textarea:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .edit-chip {
@@ -1004,12 +1004,13 @@ textarea:focus {
 }
 
 .person-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
+  display: block;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge {

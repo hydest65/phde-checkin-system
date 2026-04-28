@@ -56,6 +56,7 @@ phde-checkin-system
 - 前后端统一业务日期计算，已有签到记录会根据 `time` 自动迁移 `date` 和 `month`。
 - Leaflet 开源定位地图展示和中文化定位地址保存；地图使用 OpenStreetMap 数据与 CARTO 浅色底图。
 - 签到前确认提示展示，包括当前签到/修改状态和修改机会说明；横向状态卡片已在界面中隐藏。
+- 首页今日状态列表使用紧凑行内元信息：`app.js` 将工号、手机号、签到时间、手动地点和自动定位拼接为单行，`styles.css` 通过 `white-space: nowrap`、`overflow: hidden` 和 `text-overflow: ellipsis` 控制长定位文本。
 - Spatial UI / 玻璃拟态 UI 样式，包括浮动顶部栏、半透明业务面板、紧凑首页标题区、克制字号、留白清晰的输入框、轻投影按钮、后台表格和浅色开源地图。
 - Morimatsu 横版透明 LOGO 资源 `assets/morimatsu-spatial-logo.png`，通过透明 PNG 和 CSS `drop-shadow` 融入玻璃标题栏，避免出现白色矩形底。
 - 洁净室实验人员背景图 `assets/cleanroom-hero-bg.png`，通过 CSS 遮罩保证前景可读性。
