@@ -1,6 +1,7 @@
 const STORAGE_KEY = "phde_checkin_state_v5";
 const ADMIN_SESSION_KEY = "phde_admin";
 const THEME_KEY = "phde_theme";
+const BUSINESS_TIME_ZONE = "America/Mexico_City";
 
 const locations = [
   "光启园办公室",
@@ -26,22 +27,30 @@ function emptyState() {
   return { employees: [], checkins: [] };
 }
 
+function businessDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  return Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+}
+
 function todayKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const parts = businessDateParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function monthKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const parts = businessDateParts(date);
+  return `${parts.year}-${parts.month}`;
 }
 
 function formatTime(iso) {
   if (!iso) return "";
   return new Date(iso).toLocaleString("zh-CN", {
+    timeZone: BUSINESS_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -187,6 +196,13 @@ function saveLocalState() {
 function migrateState(nextState) {
   nextState.checkins.forEach((record) => {
     if (record.editCount === undefined) record.editCount = 0;
+    if (record.time) {
+      const recordDate = new Date(record.time);
+      if (!Number.isNaN(recordDate.getTime())) {
+        record.date = todayKey(recordDate);
+        record.month = monthKey(recordDate);
+      }
+    }
   });
   return nextState;
 }

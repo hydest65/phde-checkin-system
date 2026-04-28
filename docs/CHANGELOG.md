@@ -4,6 +4,16 @@
 
 ## 版本记录
 
+### 0.1.17 - 2026-04-27
+
+- 修改：完成 Spatial UI 收尾微调，保留 VisionOS 风格的半透明面板、强背景模糊和深层阴影，同时压缩首页标题区、表单间距和字体层级，让员工签到首屏更紧凑。
+- 修改：替换并处理 Morimatsu 横版 LOGO，去除图片残留浅色背景和矩形阴影，改用透明 PNG 与 `drop-shadow` 融入玻璃标题栏。
+- 修改：移除首页标题上方的 `PHDE` 眼标，保留顶部系统名称与页面主标题，降低视觉重复。
+- 修改：将当前页面生成到 Figma 可编辑稿，便于后续继续从 Figma 调整 UI 后同步回 Web 原型。
+- 修复：统一前端和 Render 服务端的业务日期到 `America/Mexico_City`，避免 UTC 跨日导致线上已签到记录在网页端显示为未签到。
+- 文档：同步更新 PRD、技术方案和 Web 测试部署说明，记录 0.1.17 的紧凑首页、LOGO 融合、缓存刷新和 Render/GitHub 部署检查点。
+- 验证：使用 Codex bundled Node runtime 运行 `scripts/check-docs.js`、`node --check app.js` 和 `node --check server.js`。
+
 ### 0.1.16 - 2026-04-27
 
 - 修改：完成阶段性版本收尾，保留 Leaflet 浅色开源地图自由缩放、后台文档入口和首页签到动态等能力。

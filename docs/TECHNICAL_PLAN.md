@@ -8,7 +8,8 @@
 - 后端：轻量 Node.js `server.js`
 - 数据：`data/phde-state.json`
 - 启动脚本：`start.bat`、`start-3001.bat`
-- UI 来源：`styles.css` 维护当前 Web 样式，可根据 Figma 可编辑稿或参考截图同步视觉调整；当前样式使用洁净室背景图、浅蓝灰配色、低饱和蓝白渐变、半透明毛玻璃、轻投影、统一圆角、交互动画和深色模式变量。
+- UI 来源：`styles.css` 维护当前 Web 样式，可根据 Figma 可编辑稿或参考截图同步视觉调整；当前样式使用洁净室背景图、浅蓝灰配色、低饱和蓝白渐变、Spatial UI 半透明毛玻璃、强背景模糊、深层阴影、统一大圆角、交互动画和深色模式变量。
+- 业务日期时区：默认使用 `America/Mexico_City`，可通过服务端环境变量 `BUSINESS_TIME_ZONE` 调整；前后端都以该时区生成 `date` 和 `month`，避免 Render UTC 环境跨日误判。
 
 前端在服务不可用时保留浏览器 localStorage 兜底，但正式测试以 Node.js 服务端数据为准。
 
@@ -52,9 +53,11 @@ phde-checkin-system
 - 管理密码校验。
 - 服务端管理会话校验。
 - 自动定位地址保存。
+- 前后端统一业务日期计算，已有签到记录会根据 `time` 自动迁移 `date` 和 `month`。
 - Leaflet 开源定位地图展示和中文化定位地址保存；地图使用 OpenStreetMap 数据与 CARTO 浅色底图。
 - 签到前确认提示展示，包括当前签到/修改状态和修改机会说明；横向状态卡片已在界面中隐藏。
-- 玻璃拟态 UI 样式，包括浮动顶部栏、半透明业务面板、留白充足的输入框、轻投影按钮、后台表格和浅色开源地图。
+- Spatial UI / 玻璃拟态 UI 样式，包括浮动顶部栏、半透明业务面板、紧凑首页标题区、克制字号、留白清晰的输入框、轻投影按钮、后台表格和浅色开源地图。
+- Morimatsu 横版透明 LOGO 资源 `assets/morimatsu-spatial-logo.png`，通过透明 PNG 和 CSS `drop-shadow` 融入玻璃标题栏，避免出现白色矩形底。
 - 洁净室实验人员背景图 `assets/cleanroom-hero-bg.png`，通过 CSS 遮罩保证前景可读性。
 - 深色/浅色主题切换，主题偏好保存在浏览器 localStorage 中，并通过 `data-theme` 切换 CSS 变量。
 - 首页签到动态折叠模块，基于 `checkins` 历史记录渲染最近 30 条往日签到。
@@ -179,7 +182,7 @@ Web 端使用浏览器 Geolocation API 获取定位授权。
 
 - Vue 3 或 React。
 - 移动端优先响应式布局。
-- Figma 可编辑稿和参考截图用于确认视觉方向，当前原型仍使用原生 HTML、CSS 和 JavaScript 实现；玻璃拟态效果主要由 CSS 渐变、`backdrop-filter`、半透明边框和轻投影实现，动画由 CSS transition/keyframes 实现。
+- Figma 可编辑稿和参考截图用于确认视觉方向，当前原型仍使用原生 HTML、CSS 和 JavaScript 实现；玻璃拟态和 Spatial UI 效果主要由 CSS 渐变、`backdrop-filter`、半透明边框、`drop-shadow` 和多层阴影实现，动画由 CSS transition/keyframes 实现。
 - 后台表格支持筛选、分页、导入、导出。
 
 ### 后端

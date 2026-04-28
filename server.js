@@ -9,6 +9,7 @@ const DATA_FILE = path.join(DATA_DIR, "phde-state.json");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "PHDE2026";
 const ADMIN_COOKIE = "phde_admin_auth";
 const ADMIN_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || "America/Mexico_City";
 const adminDocs = {
   prd: { title: "产品文档", file: path.join(ROOT, "docs", "PRD.md") },
   technical: { title: "技术方案", file: path.join(ROOT, "docs", "TECHNICAL_PLAN.md") },
@@ -30,17 +31,24 @@ function emptyState() {
   return { employees: [], checkins: [] };
 }
 
+function businessDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  return Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+}
+
 function todayKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const parts = businessDateParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function monthKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const parts = businessDateParts(date);
+  return `${parts.year}-${parts.month}`;
 }
 
 function ensureDataFile() {
@@ -69,6 +77,21 @@ function migrateState(state) {
     if (record.editCount === undefined) {
       record.editCount = 0;
       changed = true;
+    }
+    if (record.time) {
+      const recordDate = new Date(record.time);
+      if (!Number.isNaN(recordDate.getTime())) {
+        const date = todayKey(recordDate);
+        const month = monthKey(recordDate);
+        if (record.date !== date) {
+          record.date = date;
+          changed = true;
+        }
+        if (record.month !== month) {
+          record.month = month;
+          changed = true;
+        }
+      }
     }
   });
   if (changed) writeState(state);
