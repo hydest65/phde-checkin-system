@@ -8,7 +8,11 @@ const DATA_DIR = path.join(ROOT, "data");
 const DATA_FILE = path.join(DATA_DIR, "phde-state.json");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "PHDE2026";
 const ADMIN_COOKIE = "phde_admin_auth";
-const PROTECTED_DOCS = new Set(["/docs/PRD.md", "/docs/TECHNICAL_PLAN.md"]);
+const ADMIN_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const adminDocs = {
+  prd: { title: "产品文档", file: path.join(ROOT, "docs", "PRD.md") },
+  technical: { title: "技术方案", file: path.join(ROOT, "docs", "TECHNICAL_PLAN.md") },
+};
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -113,54 +117,17 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function sendJsonWithHeaders(res, statusCode, payload, headers = {}) {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+  res.end(JSON.stringify(payload));
+}
+
 function sendError(res, statusCode, message) {
   sendJson(res, statusCode, { message });
-}
-
-function parseCookies(cookieHeader = "") {
-  return Object.fromEntries(
-    cookieHeader
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const [name, ...value] = part.split("=");
-        return [decodeURIComponent(name), decodeURIComponent(value.join("="))];
-      }),
-  );
-}
-
-function isAdminRequest(req) {
-  return parseCookies(req.headers.cookie)[ADMIN_COOKIE] === "1";
-}
-
-function sendProtectedDocLogin(res) {
-  res.writeHead(401, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-store",
-  });
-  res.end(`<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>需要管理密码</title>
-    <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f8fa; color: #2b2b2b; font-family: "Microsoft YaHei", Arial, sans-serif; }
-      main { width: min(460px, calc(100% - 32px)); padding: 32px; background: #fff; border: 1px solid #e5e9ed; border-radius: 8px; box-shadow: 0 18px 50px rgba(26, 52, 71, 0.09); }
-      h1 { margin: 0 0 12px; font-size: 26px; }
-      p { color: #747474; line-height: 1.8; }
-      a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; color: #fff; background: #008cd3; border-radius: 6px; text-decoration: none; font-weight: 800; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>需要管理密码</h1>
-      <p>产品文档和技术方案已受保护。请先进入管理后台并输入管理密码，然后再打开文档。</p>
-      <a href="/#admin">进入管理后台</a>
-    </main>
-  </body>
-</html>`);
 }
 
 function parseBody(req) {
@@ -185,34 +152,64 @@ function parseBody(req) {
   });
 }
 
+function parseCookies(req) {
+  return Object.fromEntries(
+    String(req.headers.cookie || "")
+      .split(";")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => {
+        const index = item.indexOf("=");
+        if (index < 0) return [item, ""];
+        return [decodeURIComponent(item.slice(0, index)), decodeURIComponent(item.slice(index + 1))];
+      }),
+  );
+}
+
+function isAdminRequest(req) {
+  return parseCookies(req)[ADMIN_COOKIE] === ADMIN_TOKEN;
+}
+
+function requireAdmin(req, res) {
+  if (isAdminRequest(req)) return true;
+  sendError(res, 401, "请先登录管理后台。");
+  return false;
+}
+
 async function handleApi(req, res, url) {
   try {
-    if (req.method === "GET" && url.pathname === "/api/admin/session") {
-      sendJson(res, 200, { isAdmin: isAdminRequest(req) });
-      return;
-    }
-
     if (req.method === "POST" && url.pathname === "/api/admin/login") {
       const body = await parseBody(req);
       if (normalizeText(body.password) !== ADMIN_PASSWORD) {
-        return sendError(res, 401, "管理密码不正确。");
+        sendError(res, 401, "管理密码不正确。");
+        return;
       }
-      res.writeHead(200, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
-        "Set-Cookie": `${ADMIN_COOKIE}=1; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800`,
+      sendJsonWithHeaders(res, 200, { authenticated: true }, {
+        "Set-Cookie": `${ADMIN_COOKIE}=${encodeURIComponent(ADMIN_TOKEN)}; Path=/; HttpOnly; SameSite=Lax`,
       });
-      res.end(JSON.stringify({ isAdmin: true }));
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/admin/logout") {
-      res.writeHead(200, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
-        "Set-Cookie": `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+      sendJsonWithHeaders(res, 200, { authenticated: false }, {
+        "Set-Cookie": `${ADMIN_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
       });
-      res.end(JSON.stringify({ isAdmin: false }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/session") {
+      sendJson(res, 200, { authenticated: isAdminRequest(req) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/docs") {
+      if (!requireAdmin(req, res)) return;
+      const doc = adminDocs[url.searchParams.get("name")];
+      if (!doc) return sendError(res, 404, "文档不存在。");
+      sendJson(res, 200, {
+        title: doc.title,
+        content: fs.readFileSync(doc.file, "utf8"),
+      });
       return;
     }
 
@@ -227,11 +224,6 @@ async function handleApi(req, res, url) {
       const formEmployee = normalizeEmployee(body, "员工自助登记");
       const validationMessage = validateEmployee(formEmployee);
       if (validationMessage) return sendError(res, 400, validationMessage);
-
-      const employeeByName = state.employees.find((item) => item.name === formEmployee.name);
-      if (employeeByName && employeeByName.employeeId !== formEmployee.employeeId) {
-        return sendError(res, 400, "工号与姓名不匹配。");
-      }
 
       const employeeIndex = state.employees.findIndex((item) => item.employeeId === formEmployee.employeeId);
       const existingEmployee = employeeIndex >= 0 ? state.employees[employeeIndex] : null;
@@ -322,11 +314,11 @@ async function handleApi(req, res, url) {
 
 function serveStatic(req, res, url) {
   const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-  if (PROTECTED_DOCS.has(pathname) && !isAdminRequest(req)) {
-    sendProtectedDocLogin(res);
+  if (pathname === "/docs" || pathname.startsWith("/docs/")) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    res.end("Docs are not public in the check-in prototype.");
     return;
   }
-
   const filePath = path.resolve(ROOT, `.${pathname}`);
   if (!filePath.startsWith(ROOT)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
@@ -342,6 +334,7 @@ function serveStatic(req, res, url) {
     }
     res.writeHead(200, {
       "Content-Type": contentTypes[path.extname(filePath).toLowerCase()] || "application/octet-stream",
+      "Cache-Control": "no-store",
     });
     res.end(content);
   });

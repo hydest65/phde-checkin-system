@@ -1,5 +1,6 @@
 const STORAGE_KEY = "phde_checkin_state_v5";
 const ADMIN_SESSION_KEY = "phde_admin";
+const THEME_KEY = "phde_theme";
 
 const locations = [
   "光启园办公室",
@@ -61,7 +62,7 @@ function escapeHtml(value) {
 }
 
 let state = emptyState();
-let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+let isAdmin = false;
 let apiAvailable = false;
 let liveLocation = {
   address: "定位获取中",
@@ -69,19 +70,24 @@ let liveLocation = {
   latitude: null,
   longitude: null,
   updatedAt: "",
+  message: "",
 };
+let locationWatchId = null;
+let leafletMap = null;
+let leafletMarker = null;
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
 
 async function init() {
+  initTheme();
   qs("#adminDate").value = todayKey();
   qs("#adminMonth").value = monthKey();
   renderLocationOptions();
   bindEvents();
-  await syncAdminSession();
   route();
   await loadState();
+  await syncAdminSession();
   startRealtimeLocation();
   renderAll();
 }
@@ -89,6 +95,18 @@ async function init() {
 function bindEvents() {
   window.addEventListener("hashchange", route);
   qs("#checkinForm").addEventListener("submit", handleCheckin);
+  qs("#employeeNameInput").addEventListener("input", autofillEmployeeProfile);
+  qs("#employeeNameInput").addEventListener("blur", autofillEmployeeProfile);
+  qs("#employeeIdInput").addEventListener("input", renderCheckinPreview);
+  qs("#employeeIdInput").addEventListener("blur", syncEmployeeProfileFromId);
+  qs("#employeePhoneInput").addEventListener("input", renderCheckinPreview);
+  qs("#locationSelect").addEventListener("change", renderCheckinPreview);
+  qs("#locationSelect").addEventListener("change", () => {
+    syncLocationChoices();
+    renderLiveLocationMap();
+  });
+  qs("#locationChoiceList").addEventListener("click", handleLocationChoice);
+  qs("#retryLocation").addEventListener("click", startRealtimeLocation);
   qs("#employeeFilter").addEventListener("input", renderStatusList);
   qs("#adminLoginForm").addEventListener("submit", handleAdminLogin);
   qs("#logoutAdmin").addEventListener("click", logoutAdmin);
@@ -100,28 +118,41 @@ function bindEvents() {
   qs("#exportEmployees").addEventListener("click", exportEmployees);
   qs("#importEmployees").addEventListener("click", importEmployees);
   qs("#resetEmpty").addEventListener("click", resetEmptyData);
+  qs("#themeToggle").addEventListener("click", toggleTheme);
+  qs("#loadPrdDoc").addEventListener("click", () => loadAdminDoc("prd"));
+  qs("#loadTechDoc").addEventListener("click", () => loadAdminDoc("technical"));
+}
+
+function initTheme() {
+  const storedTheme = localStorage.getItem(THEME_KEY);
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  applyTheme(storedTheme || (prefersDark ? "dark" : "light"));
+}
+
+function toggleTheme() {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, nextTheme);
+  applyTheme(nextTheme);
+}
+
+function applyTheme(theme) {
+  const normalizedTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = normalizedTheme;
+  const toggle = qs("#themeToggle");
+  if (!toggle) return;
+  const isDark = normalizedTheme === "dark";
+  toggle.textContent = isDark ? "浅色" : "深色";
+  toggle.setAttribute("aria-pressed", String(isDark));
 }
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    credentials: "same-origin",
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.message || "请求失败。");
   return payload;
-}
-
-async function syncAdminSession() {
-  try {
-    const payload = await apiRequest("/api/admin/session");
-    isAdmin = Boolean(payload.isAdmin || sessionStorage.getItem(ADMIN_SESSION_KEY) === "1");
-    if (isAdmin) sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
-    else sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  } catch {
-    isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
-  }
 }
 
 async function loadState() {
@@ -170,11 +201,35 @@ function route() {
 
 function renderLocationOptions() {
   qs("#locationSelect").innerHTML = locations.map((loc) => `<option value="${escapeHtml(loc)}">${escapeHtml(loc)}</option>`).join("");
+  qs("#locationChoiceList").innerHTML = locations
+    .map((loc) => `<button class="location-choice" type="button" data-location="${escapeHtml(loc)}">${escapeHtml(loc)}</button>`)
+    .join("");
+  syncLocationChoices();
+}
+
+function handleLocationChoice(event) {
+  const button = event.target.closest("[data-location]");
+  if (!button) return;
+  qs("#locationSelect").value = button.dataset.location;
+  syncLocationChoices();
+  renderCheckinPreview();
+  renderLiveLocationMap();
+}
+
+function syncLocationChoices() {
+  const selectedLocation = qs("#locationSelect").value;
+  qsa(".location-choice").forEach((button) => {
+    const selected = button.dataset.location === selectedLocation;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
 }
 
 function renderAll() {
   renderEmployeeNameOptions();
   renderStatusList();
+  renderCheckinHistory();
+  renderCheckinPreview();
   renderAdmin();
 }
 
@@ -194,6 +249,130 @@ function readEmployeeForm() {
     email: existingEmployee?.email || `${employeeId || "employee"}@phde.local`,
     remark: "员工自助登记",
   };
+}
+
+function autofillEmployeeProfile() {
+  const name = qs("#employeeNameInput").value.trim();
+  if (!name) {
+    renderCheckinPreview();
+    return;
+  }
+
+  const employee = state.employees.find((item) => item.name === name);
+  if (!employee) {
+    renderCheckinPreview();
+    return;
+  }
+
+  qs("#employeeIdInput").value = employee.employeeId || "";
+  qs("#employeePhoneInput").value = employee.phone || "";
+  renderCheckinPreview();
+}
+
+function syncEmployeeProfileFromId() {
+  const employeeId = qs("#employeeIdInput").value.trim();
+  const employee = state.employees.find((item) => item.employeeId === employeeId);
+  if (employee) {
+    if (!qs("#employeeNameInput").value.trim()) qs("#employeeNameInput").value = employee.name || "";
+    if (!qs("#employeePhoneInput").value.trim()) qs("#employeePhoneInput").value = employee.phone || "";
+  }
+  renderCheckinPreview();
+}
+
+function renderCheckinPreview() {
+  const hint = qs("#employeeCheckinHint");
+  const submitButton = qs("#checkinSubmitButton");
+  if (!hint || !submitButton) return;
+
+  const name = qs("#employeeNameInput").value.trim();
+  const employeeId = qs("#employeeIdInput").value.trim();
+  const manualLocation = qs("#locationSelect").value;
+  const employee = state.employees.find((item) => item.employeeId === employeeId);
+  const todayRecord = state.checkins.find((item) => item.employeeId === employeeId && item.date === todayKey());
+
+  hint.className = "checkin-hint";
+  submitButton.textContent = "上班签到";
+  renderCheckinStatusStrip(employee, todayRecord, name, employeeId);
+
+  if (!name && !employeeId) {
+    hint.innerHTML = "<strong>签到前确认</strong><p>输入姓名和工号后，系统会提示今日签到或修改状态。</p>";
+    return;
+  }
+
+  if (!name || !employeeId) {
+    hint.classList.add("warning");
+    hint.innerHTML = "<strong>信息待补全</strong><p>请同时填写姓名和工号，系统会据此确认员工档案和今日签到状态。</p>";
+    return;
+  }
+
+  if (employee && employee.name !== name) {
+    hint.classList.add("error");
+    hint.innerHTML = `<strong>工号与姓名不匹配</strong><p>工号 ${escapeHtml(employeeId)} 已登记为 ${escapeHtml(employee.name)}，请核对后再提交。</p>`;
+    return;
+  }
+
+  if (!employee) {
+    hint.classList.add("success");
+    hint.innerHTML = `<strong>首次登记并签到</strong><p>提交后会自动建立员工档案，并记录今日地点：${escapeHtml(manualLocation)}。</p>`;
+    return;
+  }
+
+  if (!todayRecord) {
+    hint.classList.add("success");
+    hint.innerHTML = `<strong>今日尚未签到</strong><p>${escapeHtml(employee.name)} 可提交今日上班签到，提交后仍有一次修改机会。</p>`;
+    return;
+  }
+
+  submitButton.textContent = canModifyCheckin(todayRecord) ? "修改今日签到" : "今日已完成";
+
+  if (canModifyCheckin(todayRecord)) {
+    hint.classList.add("warning");
+    hint.innerHTML = `<strong>今日已签到，可修改一次</strong><p>当前记录：${escapeHtml(formatTime(todayRecord.time))}，${escapeHtml(todayRecord.manualLocation)}。再次提交会用掉最后一次修改机会。</p>`;
+    return;
+  }
+
+  hint.classList.add("error");
+  hint.innerHTML = `<strong>今日修改机会已用完</strong><p>当前记录：${escapeHtml(formatTime(todayRecord.time))}，${escapeHtml(todayRecord.manualLocation)}。如需调整，请联系管理员。</p>`;
+}
+
+function renderCheckinStatusStrip(employee, todayRecord, name, employeeId) {
+  const strip = qs("#checkinStatusStrip");
+  if (!strip) return;
+
+  let status = { tone: "", value: "待填写" };
+  let edit = { tone: "", value: "填写后判断" };
+
+  if (name && employeeId) {
+    if (employee && employee.name !== name) {
+      status = { tone: "error", value: "信息不匹配" };
+      edit = { tone: "error", value: "不可提交" };
+    } else if (!employee) {
+      status = { tone: "success", value: "首次登记" };
+      edit = { tone: "success", value: "签到后可改 1 次" };
+    } else if (!todayRecord) {
+      status = { tone: "success", value: "今日未签到" };
+      edit = { tone: "success", value: "提交后可改 1 次" };
+    } else if (canModifyCheckin(todayRecord)) {
+      status = { tone: "warning", value: "今日已签到" };
+      edit = { tone: "warning", value: "剩余最后 1 次" };
+    } else {
+      status = { tone: "error", value: "今日已完成" };
+      edit = { tone: "error", value: "修改机会已用完" };
+    }
+  } else if (name || employeeId) {
+    status = { tone: "warning", value: "信息待补全" };
+  }
+
+  const dataMode = apiAvailable ? "共享服务器" : "本机临时保存";
+  strip.innerHTML = [
+    statusPill("当前状态", status.value, status.tone),
+    statusPill("修改机会", edit.value, edit.tone),
+    statusPill("数据模式", dataMode, apiAvailable ? "success" : "warning"),
+  ].join("");
+}
+
+function statusPill(label, value, tone = "") {
+  return `<section class="status-pill ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></section>`;
 }
 
 function validateEmployeeForm(employee) {
@@ -219,8 +398,7 @@ function displayAutoAddress(value) {
   const address = String(value || "").trim();
   if (!address) return "未授权";
   if (address.includes("城市：") && address.includes("大概位置：")) return address;
-  if (address === "未授权" || address === "自动定位异常") return address;
-  if (address === "当前位置附近" || address === "设备当前位置附近") return "城市：当前城市，大概位置：当前位置附近";
+  if (address === "未授权" || address === "自动定位异常" || address === "当前位置附近") return address;
   if (/纬度|经度|latitude|longitude/i.test(address)) return "城市：当前城市，大概位置：当前位置附近";
   return localizeFreeformAddress(address);
 }
@@ -247,14 +425,6 @@ function compactAddressFromResult(result) {
   if (road) return `城市：未知，大概位置：${road}附近`;
   if (result?.display_name) return `城市：未知，大概位置：${localizeRoad(result.display_name.split(",")[0])}附近`;
   return "当前位置附近";
-}
-
-function fallbackAutoAddress(manualLocation) {
-  return locationAddressMap[manualLocation] || "城市：当前城市，大概位置：当前位置附近";
-}
-
-function isPendingAutoAddress(address) {
-  return !address || address === "正在解析当前位置..." || address === "定位获取中" || address === "当前位置附近" || address === "设备当前位置附近";
 }
 
 function localizeCity(value) {
@@ -338,25 +508,38 @@ async function setLiveLocation(position) {
 
 function setLiveLocationError(error) {
   const denied = error?.code === 1;
+  const insecureLan = window.location.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
   liveLocation = {
     address: denied ? "未授权" : "自动定位异常",
     status: denied ? "denied" : "error",
     latitude: null,
     longitude: null,
     updatedAt: new Date().toISOString(),
+    message: denied
+      ? "当前浏览器没有开放定位权限，系统将使用手动地点继续签到测试。"
+      : insecureLan
+        ? "手机通过局域网 HTTP 访问时，浏览器可能会禁止实时定位。"
+        : "定位超时或设备暂时没有返回位置。",
   };
   renderLiveLocationMap();
 }
 
 function startRealtimeLocation() {
   if (!navigator.geolocation) {
-    liveLocation = { ...liveLocation, address: "自动定位异常", status: "error" };
+    liveLocation = {
+      ...liveLocation,
+      address: "自动定位异常",
+      status: "error",
+      message: "当前浏览器不支持实时定位。",
+    };
     renderLiveLocationMap();
     return;
   }
 
+  if (locationWatchId !== null) navigator.geolocation.clearWatch(locationWatchId);
+  liveLocation = { ...liveLocation, address: "定位获取中", status: "pending", message: "" };
   renderLiveLocationMap();
-  navigator.geolocation.watchPosition(setLiveLocation, setLiveLocationError, {
+  locationWatchId = navigator.geolocation.watchPosition(setLiveLocation, setLiveLocationError, {
     enableHighAccuracy: true,
     timeout: 10000,
     maximumAge: 30000,
@@ -366,23 +549,81 @@ function startRealtimeLocation() {
 function renderLiveLocationMap() {
   const status = qs("#liveLocationStatus");
   const text = qs("#liveLocationText");
-  const map = qs("#liveLocationMap");
-  if (!status || !text || !map) return;
+  const techMap = qs("#liveLocationMap");
+  const leafletMapEl = qs("#leafletLocationMap");
+  const fallback = qs("#locationMapFallback");
+  if (!status || !text || !techMap || !leafletMapEl || !fallback) return;
 
   if (liveLocation.status === "success") {
     const lat = liveLocation.latitude;
     const lon = liveLocation.longitude;
+    const dotX = 42 + (((Math.abs(lon) * 1000) % 20) - 10);
+    const dotY = 52 + (((Math.abs(lat) * 1000) % 16) - 8);
+    const leafletReady = renderLeafletMap(lat, lon);
     status.textContent = "定位已更新";
     text.textContent = `${liveLocation.address}，更新时间：${formatTime(liveLocation.updatedAt)}`;
-    map.hidden = false;
-    map.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.006}%2C${lat - 0.004}%2C${lon + 0.006}%2C${lat + 0.004}&layer=mapnik&marker=${lat}%2C${lon}`;
+    fallback.hidden = true;
+    leafletMapEl.hidden = !leafletReady;
+    techMap.hidden = leafletReady;
+    techMap.style.setProperty("--dot-x", `${dotX}%`);
+    techMap.style.setProperty("--dot-y", `${dotY}%`);
     return;
   }
 
   status.textContent = liveLocation.status === "pending" ? "正在获取定位" : liveLocation.address;
-  text.textContent = liveLocation.status === "pending" ? "请允许浏览器定位后查看实时位置。" : `自动定位：${liveLocation.address}`;
-  map.hidden = true;
-  map.removeAttribute("src");
+  const manualLocation = qs("#locationSelect")?.value || "未选择";
+  fallback.hidden = false;
+  fallback.className = `location-map-fallback ${liveLocation.status}`;
+  fallback.querySelector("strong").textContent =
+    liveLocation.status === "pending" ? "等待定位授权" : liveLocation.status === "denied" ? "手动地点测试模式" : liveLocation.address;
+  fallback.querySelector("span").textContent =
+    liveLocation.status === "pending"
+      ? `当前手动地点：${manualLocation}。允许定位后会切换为实时地图。`
+      : `${liveLocation.message || "实时定位暂不可用。"} 当前手动地点：${manualLocation}。`;
+  text.textContent =
+    liveLocation.status === "pending"
+      ? "请允许浏览器定位后查看实时位置。"
+      : `自动定位：${liveLocation.address}。当前使用手动地点：${manualLocation}，签到可继续提交。`;
+  techMap.hidden = true;
+  leafletMapEl.hidden = true;
+}
+
+function renderLeafletMap(latitude, longitude) {
+  const mapEl = qs("#leafletLocationMap");
+  if (!mapEl || !window.L) return false;
+
+  const center = [latitude, longitude];
+  if (!leafletMap) {
+    leafletMap = window.L.map(mapEl, {
+      zoomControl: true,
+      attributionControl: true,
+      dragging: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      touchZoom: true,
+    }).setView(center, 16);
+
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+      subdomains: "abcd",
+      maxZoom: 20,
+    }).addTo(leafletMap);
+
+    leafletMarker = window.L.marker(center, {
+      icon: window.L.divIcon({
+        className: "leaflet-location-marker",
+        html: "<span></span>",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      }),
+    }).addTo(leafletMap);
+  } else {
+    leafletMap.setView(center, 16);
+    leafletMarker.setLatLng(center);
+  }
+
+  setTimeout(() => leafletMap.invalidateSize(), 0);
+  return true;
 }
 
 async function handleCheckin(event) {
@@ -392,11 +633,6 @@ async function handleCheckin(event) {
   if (validationMessage) return showFeedback("error", validationMessage);
 
   const manualLocation = qs("#locationSelect").value;
-  const employeeByName = state.employees.find((item) => item.name === formEmployee.name);
-  if (employeeByName && employeeByName.employeeId !== formEmployee.employeeId) {
-    return showFeedback("error", "工号与姓名不匹配。");
-  }
-
   const existingEmployee = state.employees.find((item) => item.employeeId === formEmployee.employeeId);
   if (existingEmployee && existingEmployee.name !== formEmployee.name) {
     return showFeedback("error", "工号与姓名不匹配。");
@@ -430,6 +666,7 @@ async function handleCheckin(event) {
       state = migrateState(payload.state);
       renderAll();
       qs("#checkinForm").reset();
+      renderCheckinPreview();
       showCheckinSuccess(payload.record, payload.action);
       return;
     }
@@ -437,6 +674,7 @@ async function handleCheckin(event) {
     const record = saveCheckinLocally(formEmployee, manualLocation, locationResult, existingCheckin);
     renderAll();
     qs("#checkinForm").reset();
+    renderCheckinPreview();
     showCheckinSuccess(record, existingCheckin ? "updated" : "created");
   } catch (error) {
     showFeedback("error", error.message || "签到失败，请稍后再试。");
@@ -484,29 +722,16 @@ function saveCheckinLocally(formEmployee, manualLocation, locationResult, existi
 
 function getAutoAddress(manualLocation) {
   if (liveLocation.status === "success" || liveLocation.status === "denied" || liveLocation.status === "error") {
-    const address = isPendingAutoAddress(liveLocation.address) ? fallbackAutoAddress(manualLocation) : liveLocation.address;
+    const address = liveLocation.address === "正在解析当前位置..." ? "当前位置附近" : liveLocation.address;
     return Promise.resolve({ address, status: liveLocation.status });
   }
 
   if (!navigator.geolocation) return Promise.resolve({ address: "自动定位异常", status: "error" });
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        liveLocation = {
-          address: "正在解析当前位置...",
-          status: "success",
-          latitude,
-          longitude,
-          updatedAt: new Date().toISOString(),
-        };
-        renderLiveLocationMap();
-
-        const resolvedAddress = await reverseGeocode(latitude, longitude);
-        const address = isPendingAutoAddress(resolvedAddress) ? fallbackAutoAddress(manualLocation) : resolvedAddress;
-        liveLocation = { ...liveLocation, address };
-        renderLiveLocationMap();
-        resolve({ address, status: "success" });
+      (position) => {
+        setLiveLocation(position);
+        resolve({ address: locationAddressMap[manualLocation] || "设备当前位置附近", status: "success" });
       },
       (error) => {
         setLiveLocationError(error);
@@ -591,13 +816,41 @@ function renderStatusList() {
     .join("");
 }
 
+function renderCheckinHistory() {
+  const historyList = qs("#historyList");
+  const historyCount = qs("#historyCount");
+  if (!historyList || !historyCount) return;
+
+  const today = todayKey();
+  const rows = state.checkins
+    .filter((record) => record.date !== today)
+    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .slice(0, 30);
+
+  historyCount.textContent = `${rows.length} 条往日记录`;
+  historyList.innerHTML = rows.length
+    ? rows
+        .map(
+          (record) => `
+        <article class="history-row">
+          <div>
+            <strong>${escapeHtml(record.name)}</strong>
+            <span>${escapeHtml(record.date)} ${escapeHtml(formatTime(record.time).split(" ").pop() || "")}</span>
+          </div>
+          <p>${escapeHtml(record.manualLocation || "未填写地点")} · ${escapeHtml(displayAutoAddress(record.autoAddress))}</p>
+        </article>
+      `,
+        )
+        .join("")
+    : '<article class="history-row empty"><strong>暂无往日签到动态</strong><p>员工完成跨日期签到后，这里会显示最近 30 条历史记录。</p></article>';
+}
+
 async function handleAdminLogin(event) {
   event.preventDefault();
-  const password = qs("#adminPassword").value;
   try {
     await apiRequest("/api/admin/login", {
       method: "POST",
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password: qs("#adminPassword").value }),
     });
     isAdmin = true;
     sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
@@ -605,18 +858,35 @@ async function handleAdminLogin(event) {
     renderAdminAuth();
     renderAdmin();
   } catch (error) {
+    if (String(error.message || "").includes("接口不存在")) {
+      alert("当前运行的本地服务还是旧版本，请先关闭旧的启动窗口，再重新运行 start.bat 或 start-3001.bat。");
+      return;
+    }
     alert(error.message || "管理密码不正确。");
   }
 }
 
 async function logoutAdmin() {
-  try {
-    if (apiAvailable) await apiRequest("/api/admin/logout", { method: "POST", body: "{}" });
-  } catch {
-    // Local session cleanup below still keeps the UI consistent if the server is unavailable.
-  }
   isAdmin = false;
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  if (apiAvailable) {
+    try {
+      await apiRequest("/api/admin/logout", { method: "POST", body: "{}" });
+    } catch {
+      // The local UI can still clear its session if the server is unavailable.
+    }
+  }
+  renderAdminAuth();
+}
+
+async function syncAdminSession() {
+  try {
+    const payload = await apiRequest("/api/admin/session");
+    isAdmin = Boolean(payload.authenticated);
+  } catch {
+    isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1" && !apiAvailable;
+  }
+  sessionStorage.setItem(ADMIN_SESSION_KEY, isAdmin ? "1" : "0");
   renderAdminAuth();
 }
 
@@ -673,6 +943,21 @@ function renderAdmin() {
         )
         .join("")
     : '<tr><td colspan="4">暂无员工信息</td></tr>';
+}
+
+async function loadAdminDoc(docName) {
+  const title = qs("#adminDocTitle");
+  const content = qs("#adminDocContent");
+  title.textContent = docName === "prd" ? "产品文档" : "技术方案";
+  content.textContent = "正在读取文档...";
+
+  try {
+    const payload = await apiRequest(`/api/admin/docs?name=${encodeURIComponent(docName)}`);
+    title.textContent = payload.title || title.textContent;
+    content.textContent = payload.content || "文档暂无内容。";
+  } catch (error) {
+    content.textContent = error.message || "读取文档失败，请重新登录后台后再试。";
+  }
 }
 
 function parseImportText(text) {
