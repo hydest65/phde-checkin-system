@@ -77,3 +77,15 @@ Run document checks with:
 ```bash
 npm run docs:check
 ```
+
+## WeChat Mini Program
+
+A starter mini program client is available in:
+
+```text
+miniprogram/
+```
+
+Deployment notes:
+
+- `docs/MINIPROGRAM_DEPLOY.md`

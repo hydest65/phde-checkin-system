@@ -586,8 +586,16 @@ function parseCookies(req) {
   );
 }
 
+function getAdminHeaderToken(req) {
+  const authHeader = String(req.headers.authorization || "").trim();
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return normalizeText(req.headers["x-admin-token"]);
+}
+
 function isAdminRequest(req) {
-  return parseCookies(req)[ADMIN_COOKIE] === ADMIN_TOKEN;
+  return parseCookies(req)[ADMIN_COOKIE] === ADMIN_TOKEN || getAdminHeaderToken(req) === ADMIN_TOKEN;
 }
 
 function requireAdmin(req, res) {
@@ -604,7 +612,7 @@ async function handleApi(req, res, url) {
         sendError(res, 401, "管理员密码不正确。");
         return;
       }
-      sendJsonWithHeaders(res, 200, { authenticated: true }, {
+      sendJsonWithHeaders(res, 200, { authenticated: true, token: ADMIN_TOKEN }, {
         "Set-Cookie": `${ADMIN_COOKIE}=${encodeURIComponent(ADMIN_TOKEN)}; Path=/; HttpOnly; SameSite=Lax`,
       });
       return;
@@ -645,6 +653,7 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/employees/import") {
+      if (!requireAdmin(req, res)) return;
       const body = await parseBody(req);
       const rows = Array.isArray(body.employees) ? body.employees : [];
       sendJson(res, 200, await importEmployees(rows));
@@ -652,6 +661,7 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/reset-empty") {
+      if (!requireAdmin(req, res)) return;
       sendJson(res, 200, { state: await resetState() });
       return;
     }

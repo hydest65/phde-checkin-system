@@ -1,0 +1,132 @@
+<view class="page">
+  <view class="topbar">
+    <view class="brand">
+      <image class="brand-logo" src="/assets/morimatsu-spatial-logo.png" mode="aspectFit"></image>
+      <view class="brand-divider"></view>
+      <view class="brand-system">PHDE 签到系统</view>
+    </view>
+  </view>
+
+  <view class="hero-card hero-card-home">
+    <view class="hero-title">员工上班签到</view>
+    <view class="hero-version">移动端测试版 0.1.18</view>
+    <view class="hero-copy">首次使用请填写姓名、工号和手机号。系统会自动建立员工档案，并完成当天上班签到。</view>
+
+    <view wx:if="{{feedback}}" class="feedback feedback-{{feedbackType}}">{{feedback}}</view>
+
+    <view class="field">
+      <text class="label">姓名</text>
+      <input class="input" placeholder="请输入姓名" value="{{form.name}}" data-field="name" bindinput="handleInput" />
+    </view>
+
+    <view class="field">
+      <text class="label">工号</text>
+      <input class="input" placeholder="请输入工号" value="{{form.employeeId}}" data-field="employeeId" bindinput="handleInput" />
+    </view>
+
+    <view class="field">
+      <text class="label">手机号</text>
+      <input class="input" type="number" placeholder="请输入手机号" value="{{form.phone}}" data-field="phone" bindinput="handleInput" />
+    </view>
+
+    <view class="field">
+      <text class="label">签到地点</text>
+      <picker mode="selector" range="{{locations}}" value="{{selectedLocationIndex}}" bindchange="handleLocationChange">
+        <view class="input picker-display">{{form.manualLocation || '请选择签到地点'}}</view>
+      </picker>
+    </view>
+
+    <view wx:if="{{locations[selectedLocationIndex] === '其他'}}" class="field">
+      <text class="label">自定义地点</text>
+      <input class="input" placeholder="请输入自定义签到地点" value="{{customLocation}}" bindinput="handleCustomLocationInput" />
+    </view>
+
+    <view class="location-panel location-panel-home">
+      <view class="location-panel-title">定位状态</view>
+      <view class="location-meta">自动定位：{{autoAddress}}</view>
+      <view class="location-meta">定位权限：{{locationStatus === 'granted' ? '已授权' : '未授权或待获取'}}</view>
+      <view class="map-preview">
+        <view class="map-grid"></view>
+        <view class="map-cross one"></view>
+        <view class="map-cross two"></view>
+        <view class="map-dot"></view>
+      </view>
+    </view>
+
+    <view class="button-row">
+      <button class="secondary" bindtap="chooseLocation">更新定位</button>
+      <button class="primary" loading="{{loading}}" bindtap="submitCheckin">上班签到</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <view>
+        <view class="eyebrow">今日概览</view>
+        <view class="section-title">签到状态</view>
+      </view>
+      <view class="metric-badge metric-badge-compact">
+        <view class="metric-value">{{checkedInCount}}</view>
+        <view class="metric-label">已签到 / {{employeeCount}}</view>
+      </view>
+    </view>
+    <view class="stat-grid">
+      <view class="stat">
+        <view class="stat-label">员工总数</view>
+        <view class="stat-value">{{employeeCount}}</view>
+      </view>
+      <view class="stat">
+        <view class="stat-label">今日未签到</view>
+        <view class="stat-value">{{pendingCount}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <view>
+        <view class="eyebrow">今日状态</view>
+      </view>
+    </view>
+    <view class="status-list">
+      <view wx:for="{{statusRows}}" wx:key="employeeId" class="status-item status-item-compact" style="height: 214rpx; display: block; box-sizing: border-box">
+        <view class="status-top">
+          <view class="status-name">{{item.name}}（{{item.employeeId}}）</view>
+          <view class="status-tag {{item.checkedIn ? 'tag-ok' : 'tag-pending'}}">
+            {{item.checkedIn ? '已签到' : '未签到'}}
+          </view>
+        </view>
+        <view class="muted">手机号：{{item.phone || '未填写'}}</view>
+        <view class="muted">时间：{{item.checkinTime || '暂无记录'}}</view>
+        <view class="muted">地点：{{item.manualLocation || '暂无记录'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <view>
+        <view class="eyebrow">往日记录</view>
+      </view>
+      <view class="history-count">{{recentHistory.length}} 条</view>
+    </view>
+    <view class="history-list">
+      <view wx:if="{{!recentHistory.length}}" class="history-item">
+        <view class="history-name">暂无签到记录</view>
+        <view class="muted">今天还没有人完成签到。</view>
+      </view>
+      <view wx:for="{{recentHistory}}" wx:key="id" class="history-item">
+        <view class="history-row-top">
+          <view class="history-name">{{item.name}}</view>
+          <view class="history-time">{{item.time}}</view>
+        </view>
+        <view class="muted">手动地点：{{item.location}}</view>
+        <view class="muted">自动定位：{{item.autoAddress}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="button-row">
+    <button class="secondary" bindtap="loadState">刷新数据</button>
+  </view>
+</view>

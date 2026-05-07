@@ -1,0 +1,9 @@
+{
+  "desc": "PHDE Check-In System mini program sitemap",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
+}
