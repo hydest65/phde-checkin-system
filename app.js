@@ -1,7 +1,7 @@
 const STORAGE_KEY = "phde_checkin_state_v5";
 const ADMIN_SESSION_KEY = "phde_admin";
 const THEME_KEY = "phde_theme";
-const BUSINESS_TIME_ZONE = "America/Mexico_City";
+const BUSINESS_TIME_ZONE = "Asia/Shanghai";
 
 const locations = [
   "光启园办公室",

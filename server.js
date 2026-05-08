@@ -13,7 +13,7 @@ const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || pro
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "PHDE2026";
 const ADMIN_COOKIE = "phde_admin_auth";
 const ADMIN_TOKEN = process.env.ADMIN_SESSION_SECRET || `session-${ADMIN_PASSWORD}`;
-const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || "America/Mexico_City";
+const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || "Asia/Shanghai";
 const adminDocs = {
   prd: { title: "产品文档", file: path.join(ROOT, "docs", "PRD.md") },
   technical: { title: "技术方案", file: path.join(ROOT, "docs", "TECHNICAL_PLAN.md") },
